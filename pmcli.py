@@ -17,7 +17,7 @@ import mimetypes
 # http://www.doughellmann.com/PyMOTW/urllib2/#uploading-files
 class MultiPartForm(object):
     """Accumulate the data to be used when posting a form."""
-
+    
     def __init__(self):
         self.form_fields = []
         self.files = []
@@ -26,12 +26,12 @@ class MultiPartForm(object):
     
     def get_content_type(self):
         return 'multipart/form-data; boundary=%s' % self.boundary
-
+    
     def add_field(self, name, value):
         """Add a simple field to the form data."""
         self.form_fields.append((name, value))
         return
-
+    
     def add_file(self, fieldname, filename, body, mimetype=None):
         """Add a file to be uploaded."""
         if mimetype is None:
@@ -88,7 +88,8 @@ class ProfileManager(object):
         self.server = server
         self.scheme = scheme
         self.headers = dict()
-        self.opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cookielib.CookieJar()))
+        self.cookiejar = cookielib.CookieJar()
+        self.opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(self.cookiejar))
     
     def create_request(self, path, data=None):
         return urllib2.Request("%s://%s%s" % (self.scheme, self.server, path), data, self.headers)
@@ -162,7 +163,7 @@ class ProfileManager(object):
         r = self.open_or_die("/devicemanagement/api/authentication/callback?auth_token=%s" % self.auth_token)
     
     def do_magic(self, magic):
-        r = self.open_or_die("/devicemanagement/api/magic/do_magic", json.dumps(magic))
+        r = self.open_or_die("/devicemanagement/api/magic/do_magic?auth_token=%s" % self.auth_token, json.dumps(magic))
         return json.loads(r.read())
     
     def import_placeholder_devices(self, devices):
@@ -209,6 +210,9 @@ class ProfileManager(object):
         response = self.do_magic({"device_group": {"find_all": [["GIMME"]]}})
         return response["remote"]["GIMME"][0][1:]
     
+    def get_device_group_details(self, group_id):
+        return self.do_magic({"device_group":{"get_details":[[None,{"ids":[group_id]}]]}})["result"]["device_group"]["retrieved"][0]
+    
 
 def main(argv):
     p = optparse.OptionParser()
@@ -226,18 +230,18 @@ def main(argv):
     
     pm = ProfileManager(server)
     pm.authenticate(username, password)
+    
     device_group_ids = pm.get_device_group_ids()
-    import pprint
-    pprint.pprint(pm.do_magic({"device_group":{"get_details":[[None,{"ids":[1]}]]}}))
+    groups_by_id = dict()
+    groups_by_name = dict()
+    for group_id in device_group_ids:
+        group = pm.get_device_group_details(group_id)
+        groups_by_id[group_id] = group
+        groups_by_name[group["name"]] = group
     
-    return 0
-    
-    device_id = pm.add_placeholder_device("test1", "C0xxxxxxxx1")
-    #group_id = 2
-    #group_data = pm.get_device_group(group_id)
-    #group_data["devices"].append(device_id)
-    #pm.update_device_group(group_data)
-    #{"device_group":{"get_tasks":[[2]],"update":[[2,{"child_device_groups":[],"name":"slask","created_at":"2012-10-02T13:36:20Z","devices":[5],"admin_session":"c30f10b7d2","temporary_id":580,"updated_at":"2012-10-05T18:28:16Z","last_modified_guid":"E99C7825-BE1F-406C-8C19-BB7FD959988C","profiles":[3],"deleted":false,"parent_device_groups":[],"id":2}]]}}
+    device_id = pm.add_placeholder_device("pmcli_test", "C080dea31")
+    groups_by_name["slask"]["devices"].append(device_id)
+    pm.update_device_group(groups_by_name["slask"]) # this fails...
     
     return 0
     
