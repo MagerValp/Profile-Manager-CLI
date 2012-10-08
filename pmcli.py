@@ -178,6 +178,25 @@ def do_test(pm, args):
     pm.add_device_to_group("slask", device_id)
 
 
+def do_add_device(pm, args):
+    usage = "Usage: add_device name (serial|imei|meid|udid)=value [group]"
+    if len(args) not in (2, 3):
+        sys.exit(usage)
+    name = args[0]
+    id_type, equal, ident = args[1].partition("=")
+    if equal != "=":
+        sys.exit(usage)
+    if id_type not in ("serial", "imei", "meid", "udid"):
+        sys.exit(usage)
+    try:
+        group = args[2]
+    except IndexError:
+        group = None
+    device_id = pm.add_placeholder_device(name, **{id_type: ident})
+    if group:
+        pm.add_device_to_group(group, device_id)
+    
+
 def unicode_csv_reader(unicode_csv_data, dialect=csv.excel, encoding="utf-8", **kwargs):
     # csv.py doesn't do Unicode; encode temporarily as UTF-8:
     csv_reader = csv.reader(unicode_csv_data, dialect=dialect, **kwargs)
@@ -248,7 +267,10 @@ def main(argv):
     except PMError as e:
         sys.exit(e)
     
-    verbs[action](pm, argv[2:])
+    try:
+        verbs[action](pm, list(x.decode("utf-8") for x in argv[2:]))
+    except PMError as e:
+        sys.exit(e)
     
     return 0
     

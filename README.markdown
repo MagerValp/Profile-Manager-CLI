@@ -31,3 +31,11 @@ The first line of the CSV should have a header, with the following keys:
 * serial/imei/meid/udid (required, select one) - unique identifier for the device
 
 The CSV file should be plain ascii or UTF-8 encoded.
+
+
+### • add_device
+
+Add a placeholder device, and optionally add it to a group.
+
+    ./pmcli.py add_device name (serial|imei|meid|udid)=value [group]
+
