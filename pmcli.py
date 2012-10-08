@@ -14,69 +14,6 @@ import itertools
 import mimetools
 import mimetypes
 
-# http://www.doughellmann.com/PyMOTW/urllib2/#uploading-files
-class MultiPartForm(object):
-    """Accumulate the data to be used when posting a form."""
-    
-    def __init__(self):
-        self.form_fields = []
-        self.files = []
-        self.boundary = mimetools.choose_boundary()
-        return
-    
-    def get_content_type(self):
-        return 'multipart/form-data; boundary=%s' % self.boundary
-    
-    def add_field(self, name, value):
-        """Add a simple field to the form data."""
-        self.form_fields.append((name, value))
-        return
-    
-    def add_file(self, fieldname, filename, body, mimetype=None):
-        """Add a file to be uploaded."""
-        if mimetype is None:
-            mimetype = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
-        self.files.append((fieldname, filename, mimetype, body))
-        return
-    
-    def __str__(self):
-        """Return a string representing the form data, including attached files."""
-        # Build a list of lists, each containing "lines" of the
-        # request.  Each part is separated by a boundary string.
-        # Once the list is built, return a string where each
-        # line is separated by '\r\n'.  
-        parts = []
-        part_boundary = '--' + self.boundary
-        
-        # Add the form fields
-        parts.extend(
-            [ part_boundary,
-              'Content-Disposition: form-data; name="%s"' % name,
-              '',
-              value,
-            ]
-            for name, value in self.form_fields
-            )
-        
-        # Add the files to upload
-        parts.extend(
-            [ part_boundary,
-              'Content-Disposition: file; name="%s"; filename="%s"' % \
-                 (field_name, filename),
-              'Content-Type: %s' % content_type,
-              '',
-              body,
-            ]
-            for field_name, filename, content_type, body in self.files
-            )
-        
-        # Flatten the list and add closing boundary marker,
-        # then return CR+LF separated data
-        flattened = list(itertools.chain(*parts))
-        flattened.append('--' + self.boundary + '--')
-        flattened.append('')
-        return '\r\n'.join(flattened)
-    
 
 class PMError(BaseException):
     pass
@@ -165,21 +102,6 @@ class ProfileManager(object):
     def do_magic(self, magic):
         r = self.open_or_die("/devicemanagement/api/magic/do_magic?auth_token=%s" % self.auth_token, json.dumps(magic))
         return json.loads(r.read())
-    
-    def import_placeholder_devices(self, devices):
-        csv = "DeviceName,SerialNumber,udid,IMEI,MEID\n%s\n" % "\n".join(devices)
-        form_data = MultiPartForm()
-        form_data.add_file("upload", "import.csv", csv, "text/csv")
-        print form_data
-        r = self.open_or_die("/devicemanagement/api/data_file/upload", str(form_data))
-        response = json.loads(r.read())
-        try:
-            file_id = response["result"]["file"]["created"][0]["id"]
-        except:
-            raise PMError("CSV upload failed")
-        response = self.do_magic({"file":{"import_placeholder_devices":[[file_id]]}})
-        import pprint
-        pprint.pprint(response)
     
     def add_placeholder_device(self, name, serial):
         response = self.do_magic({"device":{"create":[[{"SerialNumber":serial,"DeviceName":name}]]}})
