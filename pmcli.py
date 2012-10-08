@@ -9,10 +9,10 @@ import urllib2
 import cookielib
 import json
 import hashlib
+from Foundation import CFPreferencesCopyAppValue
 
-import itertools
-import mimetools
-import mimetypes
+
+BUNDLE_ID = "se.gu.it.pmcli"
 
 
 class PMError(BaseException):
@@ -43,63 +43,66 @@ class ProfileManager(object):
         return r
     
     def authenticate(self, username, password):
-        self.username = username
-        self.password = password
-        # Load login form and get cookie.
-        r = self.open_or_die("/auth")
-        # Request CSRF token.
-        r = self.open_or_die("/auth/csrf")
-        csrf_token = r.read().rstrip()
-        # Add token to request headers.
-        self.headers["X-CSRF-Token"] = csrf_token
-        # Request auth challenge.
-        r = self.open_or_die("/auth/challenge_advanced", "username=%s\n" % username)
-        # Digest nonce="ivnOFZibtwTI5F9/qQhedEkjsBYjSKnxMnTaxrxrCMp4MmR8",realm="GU",qop="auth",algorithm=md5-sess
-        challenge_data = r.read().rstrip()
-        if not challenge_data.startswith("Digest "):
-            raise PMError("Unrecognized auth challenge")
-        challenge = dict()
-        for item in challenge_data[7:].split(","):
-            k, _, v = item.partition("=")
-            if v[0] == '"' and v[-1] == '"':
-                v = v[1:-1]
-            challenge[k] = v
-        # Authenticate with digest.
-        ncvalue = "%08x" % 1
-        method = "AUTHENTICATE"
-        uri = "/"
-        cnonce = os.urandom(8).encode("hex")
-        realm = challenge["realm"]
-        nonce = challenge["nonce"]
-        qop = challenge["qop"]
-        algorithm = challenge["algorithm"]
-        if algorithm.lower() != "md5-sess":
-            raise PMError("Unsupported auth algorithm %s" % repr(algorithm))
-        md5 = lambda x: hashlib.md5(x).digest()
-        md5_hex = lambda x: hashlib.md5(x).hexdigest()
-        ha1 = md5_hex("%s:%s:%s" % (md5("%s:%s:%s" % (username, realm, password)), nonce, cnonce))
-        ha2 = md5_hex("%s:%s" % (method, uri))
-        response = md5_hex(":".join((ha1, nonce, ncvalue, cnonce, qop, ha2)))
-        digest_dict = {
-            "username": username,
-            "realm": realm,
-            "nonce": nonce,
-            "uri": uri,
-            "qop": qop,
-            "nc": ncvalue,
-            "cnonce": cnonce,
-            "algorithm": algorithm,
-            "response": response,
-        }
-        data = "Digest " + ",".join('%s="%s"' % (k, v) for k, v in digest_dict.items())
-        r = self.open_or_die("/auth/digest_login", data)
-        # {"auth_token":"D9D47C7D-F3E3-4214-8416-9B4DBB09F530","success":true}
-        result = json.loads(r.read())
-        if not result["success"]:
-            raise PMError("Authentication failed")
-        self.auth_token = result["auth_token"]
-        # Send auth_token to authentication callback.
-        r = self.open_or_die("/devicemanagement/api/authentication/callback?auth_token=%s" % self.auth_token)
+        try:
+            self.username = username
+            self.password = password
+            # Load login form and get cookie.
+            r = self.open_or_die("/auth")
+            # Request CSRF token.
+            r = self.open_or_die("/auth/csrf")
+            csrf_token = r.read().rstrip()
+            # Add token to request headers.
+            self.headers["X-CSRF-Token"] = csrf_token
+            # Request auth challenge.
+            r = self.open_or_die("/auth/challenge_advanced", "username=%s\n" % username)
+            # Digest nonce="ivnOFZibtwTI5F9/qQhedEkjsBYjSKnxMnTaxrxrCMp4MmR8",realm="GU",qop="auth",algorithm=md5-sess
+            challenge_data = r.read().rstrip()
+            if not challenge_data.startswith("Digest "):
+                raise PMError("Unrecognized auth challenge")
+            challenge = dict()
+            for item in challenge_data[7:].split(","):
+                k, _, v = item.partition("=")
+                if v[0] == '"' and v[-1] == '"':
+                    v = v[1:-1]
+                challenge[k] = v
+            # Authenticate with digest.
+            ncvalue = "%08x" % 1
+            method = "AUTHENTICATE"
+            uri = "/"
+            cnonce = os.urandom(8).encode("hex")
+            realm = challenge["realm"]
+            nonce = challenge["nonce"]
+            qop = challenge["qop"]
+            algorithm = challenge["algorithm"]
+            if algorithm.lower() != "md5-sess":
+                raise PMError("Unsupported auth algorithm %s" % repr(algorithm))
+            md5 = lambda x: hashlib.md5(x).digest()
+            md5_hex = lambda x: hashlib.md5(x).hexdigest()
+            ha1 = md5_hex("%s:%s:%s" % (md5("%s:%s:%s" % (username, realm, password)), nonce, cnonce))
+            ha2 = md5_hex("%s:%s" % (method, uri))
+            response = md5_hex(":".join((ha1, nonce, ncvalue, cnonce, qop, ha2)))
+            digest_dict = {
+                "username": username,
+                "realm": realm,
+                "nonce": nonce,
+                "uri": uri,
+                "qop": qop,
+                "nc": ncvalue,
+                "cnonce": cnonce,
+                "algorithm": algorithm,
+                "response": response,
+            }
+            data = "Digest " + ",".join('%s="%s"' % (k, v) for k, v in digest_dict.items())
+            r = self.open_or_die("/auth/digest_login", data)
+            # {"auth_token":"D9D47C7D-F3E3-4214-8416-9B4DBB09F530","success":true}
+            result = json.loads(r.read())
+            if not result["success"]:
+                raise PMError("Authentication failed")
+            self.auth_token = result["auth_token"]
+            # Send auth_token to authentication callback.
+            r = self.open_or_die("/devicemanagement/api/authentication/callback?auth_token=%s" % self.auth_token)
+        except urllib2.URLError as e:
+            raise PMError(e.reason)
     
     def do_magic(self, magic):
         r = self.open_or_die("/devicemanagement/api/magic/do_magic?auth_token=%s" % self.auth_token, json.dumps(magic))
@@ -170,17 +173,26 @@ class ProfileManager(object):
 
 def main(argv):
     p = optparse.OptionParser()
-    p.set_usage("""Usage: %prog [options] server username password""")
-    p.add_option("-v", "--verbose", action="store_true",
-                 help="Verbose output.")
+    p.set_usage("""Usage: %prog [options]""")
+    p.add_option("-v", "--verbose", action="store_true")
+    p.add_option("-s", "--server")
+    p.add_option("-u", "--username")
+    p.add_option("-p", "--password")
     options, argv = p.parse_args(argv)
-    if len(argv) != 4:
+    if len(argv) != 1:
         print >>sys.stderr, p.get_usage()
         return 1
     
-    server = argv[1]
-    username = argv[2]
-    password = argv[3]
+    server = options.server or CFPreferencesCopyAppValue("server", BUNDLE_ID)
+    if not server:
+        sys.exit("No server specified")
+    username = options.username or CFPreferencesCopyAppValue("username", BUNDLE_ID)
+    if not username:
+        sys.exit("No username specified")
+    password = options.password or CFPreferencesCopyAppValue("password", BUNDLE_ID)
+    if not password:
+        sys.exit("No password specified")
+    
     
     pm = ProfileManager(server)
     try:
