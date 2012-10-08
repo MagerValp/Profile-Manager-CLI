@@ -27,6 +27,8 @@ class ProfileManager(object):
         self.headers = dict()
         self.cookiejar = cookielib.CookieJar()
         self.opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(self.cookiejar))
+        #self.groups_by_id = None
+        self.groups_by_name = None
     
     def create_request(self, path, data=None):
         return urllib2.Request("%s://%s%s" % (self.scheme, self.server, path), data, self.headers)
@@ -103,8 +105,22 @@ class ProfileManager(object):
         r = self.open_or_die("/devicemanagement/api/magic/do_magic?auth_token=%s" % self.auth_token, json.dumps(magic))
         return json.loads(r.read())
     
-    def add_placeholder_device(self, name, serial):
-        response = self.do_magic({"device":{"create":[[{"SerialNumber":serial,"DeviceName":name}]]}})
+    def add_placeholder_device(self, name, serial=None, imei=None, meid=None, udid=None):
+        args = dict()
+        args["DeviceName"] = name
+        if serial is not None:
+            args["SerialNumber"] = serial
+        if imei is not None:
+            args["IMEI"] = imei
+        if meid is not None:
+            args["MEID"] = meid
+        if udid is not None:
+            args["udid"] = udid
+        response = self.do_magic({"device":
+            {"create":
+                [[args]]
+            }
+        })
         try:
             device_id = response["result"]["device"]["created"][0]["id"]
         except:
@@ -116,7 +132,8 @@ class ProfileManager(object):
         import pprint
         pprint.pprint(response)
     
-    def add_device_to_group(self, group_id, device_id):
+    def add_device_to_group(self, group_name, device_id):
+        group_id = self.get_group(group_name)["id"]
         response = self.do_magic({
             "device_group": {
                 "add_device": [[group_id, {"id": [device_id]}]]
@@ -134,6 +151,22 @@ class ProfileManager(object):
             }
         })["result"]["device_group"]["retrieved"][0]
     
+    def load_groups(self):
+        if self.groups_by_name is None:
+            #self.groups_by_id = dict()
+            self.groups_by_name = dict()
+            for group_id in self.get_device_group_ids():
+                group = self.get_device_group_details(group_id)
+                #self.groups_by_id[group_id] = group
+                self.groups_by_name[group["name"]] = group
+    
+    def get_group(self, name):
+        self.load_groups()
+        try:
+            return self.groups_by_name[name]
+        except KeyError:
+            raise PMError("No such group %s" % repr(name))
+    
 
 def main(argv):
     p = optparse.OptionParser()
@@ -150,18 +183,13 @@ def main(argv):
     password = argv[3]
     
     pm = ProfileManager(server)
-    pm.authenticate(username, password)
+    try:
+        pm.authenticate(username, password)
+    except PMError as e:
+        sys.exit(e)
     
-    device_group_ids = pm.get_device_group_ids()
-    groups_by_id = dict()
-    groups_by_name = dict()
-    for group_id in device_group_ids:
-        group = pm.get_device_group_details(group_id)
-        groups_by_id[group_id] = group
-        groups_by_name[group["name"]] = group
-    
-    device_id = pm.add_placeholder_device("pmcli_test", "C080dea31")
-    pm.add_device_to_group(groups_by_name["slask"]["id"], device_id)
+    device_id = pm.add_placeholder_device("pmcli_test", serial="C080dea31")
+    pm.add_device_to_group("slask", device_id)
     
     return 0
     
