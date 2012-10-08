@@ -233,7 +233,6 @@ def do_import(pm, args):
 def main(argv):
     p = optparse.OptionParser()
     p.set_usage("""Usage: %prog [options] verb""")
-    p.add_option("-v", "--verbose", action="store_true")
     p.add_option("-s", "--server")
     p.add_option("-u", "--username")
     p.add_option("-p", "--password")
