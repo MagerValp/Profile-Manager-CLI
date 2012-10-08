@@ -9,6 +9,8 @@ import urllib2
 import cookielib
 import json
 import hashlib
+import csv
+import codecs
 from Foundation import CFPreferencesCopyAppValue
 
 
@@ -171,17 +173,64 @@ class ProfileManager(object):
             raise PMError("No such group %s" % repr(name))
     
 
+def do_test(pm, args):
+    device_id = pm.add_placeholder_device("pmcli_test", serial="C080dea31")
+    pm.add_device_to_group("slask", device_id)
+
+
+def unicode_csv_reader(unicode_csv_data, dialect=csv.excel, encoding="utf-8", **kwargs):
+    # csv.py doesn't do Unicode; encode temporarily as UTF-8:
+    csv_reader = csv.reader(unicode_csv_data, dialect=dialect, **kwargs)
+    for row in csv_reader:
+        # decode UTF-8 back to Unicode, cell by cell:
+        yield [cell.decode(encoding) for cell in row]
+    
+
+def do_import(pm, args):
+    if len(args) != 1:
+        sys.exit("Usage: import file.csv")
+    rows = list(unicode_csv_reader(open(args[0])))
+    if len(rows) < 2:
+        sys.exit("Bad csv file")
+    headers = rows[0]
+    if not "name" in headers:
+        sys.exit("Missing required column 'name'")
+    for row in rows[1:]:
+        device = dict()
+        for i, value in enumerate(row):
+            device[headers[i]] = value
+        if "group" in device:
+            group = device["group"]
+            del device["group"]
+        else:
+            group = None
+        name = device["name"]
+        del device["name"]
+        device_id = pm.add_placeholder_device(name, **device)
+        if group:
+            pm.add_device_to_group(group, device_id)
+    
+
 def main(argv):
     p = optparse.OptionParser()
-    p.set_usage("""Usage: %prog [options]""")
+    p.set_usage("""Usage: %prog [options] verb""")
     p.add_option("-v", "--verbose", action="store_true")
     p.add_option("-s", "--server")
     p.add_option("-u", "--username")
     p.add_option("-p", "--password")
     options, argv = p.parse_args(argv)
-    if len(argv) != 1:
+    if len(argv) < 2:
         print >>sys.stderr, p.get_usage()
         return 1
+    
+    verbs = dict()
+    for name, func in globals().items():
+        if name.startswith("do_"):
+            verbs[name[3:]] = func
+    
+    action = argv[1]
+    if action not in verbs:
+        sys.exit("Unknown verb %s" % action)
     
     server = options.server or CFPreferencesCopyAppValue("server", BUNDLE_ID)
     if not server:
@@ -193,15 +242,13 @@ def main(argv):
     if not password:
         sys.exit("No password specified")
     
-    
     pm = ProfileManager(server)
     try:
         pm.authenticate(username, password)
     except PMError as e:
         sys.exit(e)
     
-    device_id = pm.add_placeholder_device("pmcli_test", serial="C080dea31")
-    pm.add_device_to_group("slask", device_id)
+    verbs[action](pm, argv[2:])
     
     return 0
     
