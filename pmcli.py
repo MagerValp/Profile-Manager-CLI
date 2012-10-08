@@ -194,24 +194,23 @@ class ProfileManager(object):
         import pprint
         pprint.pprint(response)
     
-    def update_device_group(self, group_data):
+    def add_device_to_group(self, group_id, device_id):
         response = self.do_magic({
             "device_group": {
-                "update": [
-                    group_data["id"],
-                    group_data,
-                ]
+                "add_device": [[group_id, {"id": [device_id]}]]
             }
         })
-        import pprint
-        pprint.pprint(response)
     
     def get_device_group_ids(self):
         response = self.do_magic({"device_group": {"find_all": [["GIMME"]]}})
         return response["remote"]["GIMME"][0][1:]
     
     def get_device_group_details(self, group_id):
-        return self.do_magic({"device_group":{"get_details":[[None,{"ids":[group_id]}]]}})["result"]["device_group"]["retrieved"][0]
+        return self.do_magic({
+            "device_group": {
+                "get_details": [[None, {"ids": [group_id]}]]
+            }
+        })["result"]["device_group"]["retrieved"][0]
     
 
 def main(argv):
@@ -240,8 +239,7 @@ def main(argv):
         groups_by_name[group["name"]] = group
     
     device_id = pm.add_placeholder_device("pmcli_test", "C080dea31")
-    groups_by_name["slask"]["devices"].append(device_id)
-    pm.update_device_group(groups_by_name["slask"]) # this fails...
+    pm.add_device_to_group(groups_by_name["slask"]["id"], device_id)
     
     return 0
     
