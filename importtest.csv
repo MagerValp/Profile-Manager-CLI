@@ -1,2 +1,3 @@
-name,serial,group
-impörttest,C12345678,slask
+name,ids,groups
+impörttest,serial=C12345678+udid=1029385618384028136418842830,slask
+imeitest,imei=111222333444,slask+testgroup2

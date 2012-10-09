@@ -11,10 +11,69 @@ import json
 import hashlib
 import csv
 import codecs
+import cStringIO
 from Foundation import CFPreferencesCopyAppValue
 
 
 BUNDLE_ID = "se.gu.it.pmcli"
+
+
+# Classes to deal with the csv module's inability to deal with Unicode, from
+# http://docs.python.org/library/csv.html#examples
+
+class UTF8Recoder:
+    """
+    Iterator that reads an encoded stream and reencodes the input to UTF-8
+    """
+    def __init__(self, f, encoding):
+        self.reader = codecs.getreader(encoding)(f)
+    
+    def __iter__(self):
+        return self
+    
+    def next(self):
+        return self.reader.next().encode("utf-8")
+
+class UnicodeCSVReader:
+    """
+    A CSV reader which will iterate over lines in the CSV file "f",
+    which is encoded in the given encoding.
+    """
+    
+    def __init__(self, f, dialect=csv.excel, encoding="utf-8", **kwds):
+        f = UTF8Recoder(f, encoding)
+        self.reader = csv.reader(f, dialect=dialect, **kwds)
+    
+    def next(self):
+        row = self.reader.next()
+        return [unicode(s, "utf-8") for s in row]
+    
+    def __iter__(self):
+        return self
+
+class UnicodeCSVWriter:
+    """
+    A CSV writer which will write rows to CSV file "f",
+    which is encoded in the given encoding.
+    """
+    
+    def __init__(self, f, dialect=csv.excel, encoding="utf-8", **kwds):
+        self.queue = cStringIO.StringIO()
+        self.writer = csv.writer(self.queue, dialect=dialect, **kwds)
+        self.stream = f
+        self.encoder = codecs.getincrementalencoder(encoding)()
+    
+    def writerow(self, row):
+        self.writer.writerow([s.encode("utf-8") for s in row])
+        data = self.queue.getvalue()
+        data = data.decode("utf-8")
+        data = self.encoder.encode(data)
+        self.stream.write(data)
+        self.queue.truncate(0)
+    
+    def writerows(self, rows):
+        for row in rows:
+            self.writerow(row)
 
 
 class PMError(BaseException):
@@ -145,23 +204,33 @@ class ProfileManager(object):
             }
         })
     
+    def get_device_ids(self):
+        response = self.do_magic({"device": {"find_all": [["GIMME"]]}})
+        return response["remote"]["GIMME"][0][1:]
+    
+    def get_device_details(self, device_ids):
+        return self.do_magic({
+            "device": {
+                "get_details": [[None, {"ids": device_ids}]]
+            }
+        })["result"]["device"]["retrieved"]
+    
     def get_device_group_ids(self):
         response = self.do_magic({"device_group": {"find_all": [["GIMME"]]}})
         return response["remote"]["GIMME"][0][1:]
     
-    def get_device_group_details(self, group_id):
+    def get_device_group_details(self, group_ids):
         return self.do_magic({
             "device_group": {
-                "get_details": [[None, {"ids": [group_id]}]]
+                "get_details": [[None, {"ids": group_ids}]]
             }
-        })["result"]["device_group"]["retrieved"][0]
+        })["result"]["device_group"]["retrieved"]
     
     def load_groups(self):
         if self.groups_by_name is None:
             #self.groups_by_id = dict()
             self.groups_by_name = dict()
-            for group_id in self.get_device_group_ids():
-                group = self.get_device_group_details(group_id)
+            for group in self.get_device_group_details(self.get_device_group_ids()):
                 #self.groups_by_id[group_id] = group
                 self.groups_by_name[group["name"]] = group
     
@@ -178,8 +247,8 @@ def do_test(pm, args):
     pm.add_device_to_group("slask", device_id)
 
 
-def do_add_device(pm, args):
-    usage = "Usage: add_device name (serial|imei|meid|udid)=value [group]"
+def do_add_placeholder(pm, args):
+    usage = "Usage: add_placeholder name (serial|imei|meid|udid)=value [group]"
     if len(args) not in (2, 3):
         sys.exit(usage)
     name = args[0]
@@ -205,29 +274,61 @@ def unicode_csv_reader(unicode_csv_data, dialect=csv.excel, encoding="utf-8", **
         yield [cell.decode(encoding) for cell in row]
     
 
-def do_import(pm, args):
+def do_import_placeholders(pm, args):
     if len(args) != 1:
-        sys.exit("Usage: import file.csv")
-    rows = list(unicode_csv_reader(open(args[0])))
+        sys.exit("Usage: import_placeholders input.csv")
+    rows = list(UnicodeCSVReader(open(args[0])))
     if len(rows) < 2:
         sys.exit("Bad csv file")
     headers = rows[0]
-    if not "name" in headers:
-        sys.exit("Missing required column 'name'")
+    if headers != [u"name", u"ids", u"groups"]:
+        sys.exit("Missing required column headers")
     for row in rows[1:]:
-        device = dict()
-        for i, value in enumerate(row):
-            device[headers[i]] = value
-        if "group" in device:
-            group = device["group"]
-            del device["group"]
-        else:
-            group = None
-        name = device["name"]
-        del device["name"]
-        device_id = pm.add_placeholder_device(name, **device)
-        if group:
-            pm.add_device_to_group(group, device_id)
+        name = row[0]
+        ids = dict()
+        for t, _, i in [x.partition("=") for x in row[1].split("+")]:
+            ids[t] = i
+        device_id = pm.add_placeholder_device(name, **ids)
+        if row[2]:
+            for group in row[2].split("+"):
+                pm.add_device_to_group(group, device_id)
+    
+
+def do_dump_devices(pm, args):
+    if len(args) != 1:
+        sys.exit("Usage: dump_devices output.json")
+    output_fname = args[0]
+    device_ids = pm.get_device_ids()
+    devices = pm.get_device_details(device_ids)
+    with open(output_fname, "w") as f:
+        json.dump({"Devices": devices}, f, indent=4)
+    
+
+def do_export_placeholders(pm, args):
+    if len(args) != 1:
+        sys.exit("Usage: export_placeholders output.csv")
+    output_fname = args[0]
+    with open(output_fname, "w") as f:
+        writer = UnicodeCSVWriter(f)
+        writer.writerow(["name", "ids", "groups"])
+        device_ids = pm.get_device_ids()
+        for device in pm.get_device_details(device_ids):
+            name = device["DeviceName"]
+            ids = list()
+            for k, v in (("SerialNumber", "serial"),
+                         ("IMEI", "imei"),
+                         ("MEID", "meid"),
+                         ("udid", "udid"),
+                        ):
+                if device[k]:
+                    ids.append("%s=%s" % (v, device[k]))
+            idstr = "+".join(ids)
+            groups = list()
+            if device["device_groups"]:
+                for group in pm.get_device_group_details(device["device_groups"]):
+                    groups.append(group["name"])
+            groupstr = "+".join(groups)
+            writer.writerow([name, idstr, groupstr])
     
 
 def main(argv):
