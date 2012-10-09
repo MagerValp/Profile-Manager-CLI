@@ -12,6 +12,7 @@ import hashlib
 import csv
 import codecs
 import cStringIO
+import getpass
 from Foundation import CFPreferencesCopyAppValue
 
 
@@ -337,6 +338,7 @@ def main(argv):
     p.add_option("-s", "--server")
     p.add_option("-u", "--username")
     p.add_option("-p", "--password")
+    p.add_option("-P", "--prompt-password", action="store_true")
     options, argv = p.parse_args(argv)
     if len(argv) < 2:
         print >>sys.stderr, p.get_usage()
@@ -358,6 +360,8 @@ def main(argv):
     if not username:
         sys.exit("No username specified")
     password = options.password or CFPreferencesCopyAppValue("password", BUNDLE_ID)
+    if options.prompt_password or not password:
+        password = getpass.getpass("Password for %s@%s: " % (username, server))
     if not password:
         sys.exit("No password specified")
     
