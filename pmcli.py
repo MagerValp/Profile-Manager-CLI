@@ -285,7 +285,8 @@ def do_import_placeholders(pm, args):
     if headers != [u"name", u"ids", u"groups"]:
         sys.exit("Missing required column headers")
     for row in rows[1:]:
-        name = row[0]
+        # Empty names are displayed as "New Device" in PM.
+        name = row[0] or None
         ids = dict()
         for t, _, i in [x.partition("=") for x in row[1].split("+")]:
             ids[t] = i
@@ -314,7 +315,8 @@ def do_export_placeholders(pm, args):
         writer.writerow(["name", "ids", "groups"])
         device_ids = pm.get_device_ids()
         for device in pm.get_device_details(device_ids):
-            name = device["DeviceName"]
+            # Handle devices with empty names.
+            name = device["DeviceName"] or ""
             ids = list()
             for k, v in (("SerialNumber", "serial"),
                          ("IMEI", "imei"),
@@ -327,7 +329,8 @@ def do_export_placeholders(pm, args):
             groups = list()
             if device["device_groups"]:
                 for group in pm.get_device_group_details(device["device_groups"]):
-                    groups.append(group["name"])
+                    if group:
+                        groups.append(group["name"])
             groupstr = "+".join(groups)
             writer.writerow([name, idstr, groupstr])
     
