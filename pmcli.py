@@ -267,14 +267,6 @@ def do_add_placeholder(pm, args):
         pm.add_device_to_group(group, device_id)
     
 
-def unicode_csv_reader(unicode_csv_data, dialect=csv.excel, encoding="utf-8", **kwargs):
-    # csv.py doesn't do Unicode; encode temporarily as UTF-8:
-    csv_reader = csv.reader(unicode_csv_data, dialect=dialect, **kwargs)
-    for row in csv_reader:
-        # decode UTF-8 back to Unicode, cell by cell:
-        yield [cell.decode(encoding) for cell in row]
-    
-
 def do_import_placeholders(pm, args):
     if len(args) != 1:
         sys.exit("Usage: import_placeholders input.csv")
