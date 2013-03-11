@@ -195,10 +195,6 @@ def main(argv):
     pm = profilemanager.ProfileManager(server)
     try:
         pm.authenticate(username, password)
-    except profilemanager.PMError as e:
-        sys.exit(e)
-    
-    try:
         verbs[action](pm, list(x.decode("utf-8") for x in argv[2:]))
     except profilemanager.PMError as e:
         sys.exit(e)
