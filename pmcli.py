@@ -81,8 +81,8 @@ def do_test(pm, args):
 
 
 def do_add_placeholder(pm, args):
-    usage = "Usage: add_placeholder name (serial|imei|meid|udid)=value [group]"
-    if len(args) not in (2, 3, 4):
+    usage = "Usage: add_placeholder name (serial|imei|meid|udid)=value [group] [group] ..."
+    if len(args) < 2:
         sys.exit(usage)
     name = args[0]
     id_type, equal, ident = args[1].partition("=")
@@ -91,21 +91,14 @@ def do_add_placeholder(pm, args):
     if id_type not in ("serial", "imei", "meid", "udid"):
         sys.exit(usage)
     try:
-        group = args[2]
+    	group = args[2]
     except IndexError:
         group = None
     device_id = pm.add_placeholder_device(name, **{id_type: ident})
     if group:
-        pm.add_device_to_group(group, device_id)
-    try:
-        group2 = args[3]
-    except IndexError:
-        group2 = None
-    device_id = pm.add_placeholder_device(name, **{id_type: ident})
-    if group2:
-        pm.add_device_to_group(group2, device_id)
+       	for group in args[2:]:
+    		pm.add_device_to_group(group, device_id)
     
-
 def do_import_placeholders(pm, args):
     if len(args) != 1:
         sys.exit("Usage: import_placeholders input.csv")
