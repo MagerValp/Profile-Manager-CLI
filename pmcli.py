@@ -90,15 +90,10 @@ def do_add_placeholder(pm, args):
         sys.exit(usage)
     if id_type not in ("serial", "imei", "meid", "udid"):
         sys.exit(usage)
-    try:
-    	group = args[2]
-    except IndexError:
-        group = None
-    device_id = pm.add_placeholder_device(name, **{id_type: ident})
-    if group:
-       	for group in args[2:]:
-    		pm.add_device_to_group(group, device_id)
-    
+    for group in args[2:]:
+        pm.add_device_to_group(group, device_id)
+
+
 def do_import_placeholders(pm, args):
     if len(args) != 1:
         sys.exit("Usage: import_placeholders input.csv")
