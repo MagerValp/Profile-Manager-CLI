@@ -22,7 +22,7 @@ Or you can set defaults (but command line options will override):
 
 ### • add_placeholder
 
-Add a placeholder device, and optionally add it to one o more groups.
+Add a placeholder device, and optionally add it to one or more groups.
 
     ./pmcli.py add_placeholder name (serial|imei|meid|udid)=value [group] [group] ...
 
