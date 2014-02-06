@@ -9,7 +9,7 @@ Usage
 
 You can specify the server, username, and password on the command line:
 
-    ./pmcli.py -u pmserver.example.com -u diradmin -p apple
+    ./pmcli.py -s pmserver.example.com -u diradmin -p apple
 
 You can also force a prompt for a password with `-P`.
 
@@ -22,9 +22,9 @@ Or you can set defaults (but command line options will override):
 
 ### • add_placeholder
 
-Add a placeholder device, and optionally add it to a group.
+Add a placeholder device, and optionally add it to one o more groups.
 
-    ./pmcli.py add_placeholder name (serial|imei|meid|udid)=value [group]
+    ./pmcli.py add_placeholder name (serial|imei|meid|udid)=value [group] [group] ...
 
 
 ### • import_placeholders
