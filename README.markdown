@@ -4,6 +4,12 @@ Profile Manager CLI
 A command line interface for Profile Manager administration.
 
 
+Requirements
+------------
+
+Currently Profile Manager 1 (Lion) and 2 (Mountain Lion) are supported.
+
+
 Usage
 -----
 
