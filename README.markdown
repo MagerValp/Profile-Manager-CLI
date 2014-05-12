@@ -7,7 +7,7 @@ A command line interface for Profile Manager administration.
 Requirements
 ------------
 
-Currently Profile Manager 1 (Lion) and 2 (Mountain Lion) are supported.
+Currently Profile Manager 1 (Lion) and 2 (Mountain Lion) are supported. Profile Manager 3 (Mavericks) is not supported at this time, see [issue #2](https://github.com/MagerValp/Profile-Manager-CLI/issues/2).
 
 
 Usage
